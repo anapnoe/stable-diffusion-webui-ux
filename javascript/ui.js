@@ -69,13 +69,13 @@ function switch_to_inpaint_sketch(){
     return args_to_array(arguments);
 }
 
-function switch_to_inpaint(){
+/* function switch_to_inpaint(){
     gradioApp().querySelector('#tabs').querySelectorAll('button')[1].click();
     gradioApp().getElementById('mode_img2img').querySelectorAll('button')[2].click();
 
     return args_to_array(arguments);
 }
-
+ */
 function switch_to_extras(){
     gradioApp().querySelector('#tabs').querySelectorAll('button')[2].click();
 
@@ -307,7 +307,7 @@ onUiUpdate(function(){
 		});
 	}
 	
-	gradioApp().querySelectorAll('[id$="_prompt"] textarea, [id^="setting_"] textarea').forEach(function (elem) {
+	gradioApp().querySelectorAll('[id$="_prompt"] textarea, [id^="setting_"] textarea, textarea').forEach(function (elem) {
 		elem.style.boxSizing = 'border-box';
 		var offset = elem.offsetHeight - elem.clientHeight;
 		elem.addEventListener('input', function (e) {
@@ -910,6 +910,8 @@ onUiUpdate(function(){
 
 	// input release component dispatcher
 	let active_clone_input = [];
+	let focus_input, last_focus_input;
+
 	function ui_input_release_component(elem){
 
 		if(active_clone_input.length > 0) return;
@@ -917,7 +919,7 @@ onUiUpdate(function(){
 		//img2img_width
 		let parent = elem.parentElement;
 		let comp_parent = parent.parentElement.parentElement;		
-		if(comp_parent.id == ("img2img_width" || "img2img_height" )) return;
+		if(comp_parent.id == "img2img_width" || comp_parent.id == "img2img_height") return;
 		
 		let clone_num = elem.cloneNode();
 		active_clone_input.push(clone_num);
@@ -930,10 +932,18 @@ onUiUpdate(function(){
 		parent.append(clone_num);		
 		elem.classList.add("hidden");
 		
-		clone_num.addEventListener('change', function (e) {			
+		clone_num.addEventListener('change', function (e) {		
 			elem.value = clone_num.value;
 			updateInput(elem);
 		})
+		
+		clone_num.addEventListener('focus', function (e) {				
+			focus_input = clone_num;					
+		})
+		
+/* 		clone_num.addEventListener('blur', function (e) {			
+			focus_input = false;			
+		}) */
 
 		if(label){				
 			let comp_range = comp_parent.querySelector("input[type='range']");
@@ -945,21 +955,41 @@ onUiUpdate(function(){
 			comp_range.parentElement.append(clone_range);				
 			comp_range.classList.add("hidden");
 			
-			clone_range.addEventListener('input', function (e) {								
-				clone_num.value = e.target.value;	
-			})
+ 			clone_range.addEventListener('input', function (e) {							
+				clone_num.value = e.target.value;
+			})		
 			clone_range.addEventListener('change', function (e) {
 				elem.value = clone_range.value;
 				updateInput(elem);	
 			})				
 			clone_num.addEventListener('input', function (e) {								
 				clone_range.value = e.target.value;	
-			})								
+			}) 
+			
+			const rect = clone_range.getBoundingClientRect();
+			const xoffset = (rect.left + window.scrollX);
+			clone_range.addEventListener('touchmove', function(e) {
+				e.preventDefault();				
+				let percent = parseInt(((e.touches[0].pageX - xoffset) / this.offsetWidth) * 10000) / 10000;				
+				clone_range.value = ( percent * (this.max - this.min)) + parseFloat(this.min);				
+				clone_num.value = clone_range.value;
+			});
+
 		}				
 	}
+	function ui_input_focus_handler(e){
+		if(e.target != focus_input){
+			focus_input = false;
+			ui_input_release_handler(e);
+		}
+	}
+	
 	function ui_input_release_handler(e){
 		const len = active_clone_input.length;
-		if(len > 0){
+		
+		if(focus_input){return;}
+
+		if(len > 0){		
 			if(e.target.id.indexOf("_clone") == -1){
 				for(var i=len-1; i>=0; i--){
 					let relem = active_clone_input[i];
@@ -969,6 +999,7 @@ onUiUpdate(function(){
 				}
 			}
 		}
+			
 	
 		let elem_type = e.target.tagName;
 		if(elem_type == "INPUT"){
@@ -977,15 +1008,21 @@ onUiUpdate(function(){
 				ui_input_release_component(elem);				
 			}else if(elem.type == "range"){
 				elem = e.target.parentElement.querySelector("input[type='number']");
-				ui_input_release_component(elem);				
+				if(elem){
+					ui_input_release_component(elem);
+				}				
 			}
 		}
 	}
 	function ui_dispatch_input_release(value){	
 		if(value){
 			gradioApp().querySelector(".gradio-container").addEventListener('mouseover',  ui_input_release_handler);
+			//gradioApp().querySelector(".gradio-container").addEventListener('touchmove',  ui_input_release_handler);
+			gradioApp().querySelector(".gradio-container").addEventListener('mousedown',  ui_input_focus_handler);
 		}else{
 			gradioApp().querySelector(".gradio-container").removeEventListener('mouseover',  ui_input_release_handler);
+			//gradioApp().querySelector(".gradio-container").removeEventListener('touchmove',  ui_input_release_handler);
+			gradioApp().querySelector(".gradio-container").removeEventListener('mousedown',  ui_input_focus_handler);
 		}
 	}
 	gradioApp().querySelector("#setting_ui_dispatch_input_release input").addEventListener('click', function (e) {		
@@ -1158,8 +1195,12 @@ onUiUpdate(function(){
 
 	const pnginfo = gradioApp().querySelector("#tab_pnginfo"); 
 	function forwardFromPngInfo(){
+		
 		if(selectedTabItemId == "tab_txt2img"){
 			pnginfo.querySelector('#txt2img_tab').click();
+			//close generation info
+			gradioApp().querySelector('#txt2img_results > div:last-child > div:last-child > div:last-child').classList.add("!hidden");
+
 			const img_src = pnginfo.querySelector('img');
 			const gallery_parent = gradioApp().querySelector('#txt2img_gallery_container');
 			const live_preview = gallery_parent.querySelector('.livePreview');
@@ -1171,8 +1212,10 @@ onUiUpdate(function(){
 				div.innerHTML = '<img width="'+img_src.width+'" height="'+img_src.height+'" src="'+ img_src.src +'">';
 				gallery_parent.prepend(div);
 			}			
-		}else if(selectedTabItemId == "tab_img2img"){
-			pnginfo.querySelector('#img2img_tab').click();		
+		}else if(selectedTabItemId == "tab_img2img"){			
+			pnginfo.querySelector('#img2img_tab').click();
+			//close generation info
+			gradioApp().querySelector('#img2img_results > div:last-child > div:last-child > div:last-child').classList.add("!hidden");				
 		}
 		
 	}
