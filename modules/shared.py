@@ -110,6 +110,7 @@ parser.add_argument("--gradio-queue", action='store_true', help="Uses gradio que
 parser.add_argument("--skip-version-check", action='store_true', help="Do not check versions of torch and xformers")
 parser.add_argument("--no-hashing", action='store_true', help="disable sha256 hashing of checkpoints to help loading performance", default=False)
 parser.add_argument("--no-download-sd-model", action='store_true', help="don't download SD1.5 model even if no model is found in --ckpt-dir", default=False)
+parser.add_argument("--token-merging", action='store_true', help="Provides speed and memory improvements by merging redundant tokens. This has a more pronounced effect on higher resolutions.", default=False)
 
 
 script_loading.preload_extensions(extensions.extensions_dir, parser)
@@ -525,6 +526,54 @@ options_templates.update(options_section(('postprocessing', "Postprocessing"), {
 options_templates.update(options_section((None, "Hidden options"), {
     "disabled_extensions": OptionInfo([], "Disable those extensions"),
     "sd_checkpoint_hash": OptionInfo("", "SHA256 hash of the current checkpoint"),
+}))
+
+options_templates.update(options_section(('token_merging', 'Token Merging'), {
+    "token_merging": OptionInfo(
+        False, "Enable redundant token merging via tomesd. This can provide significant speed and memory improvements.",
+        gr.Checkbox
+    ),
+    "token_merging_ratio": OptionInfo(
+        0.5, "Merging Ratio",
+        gr.Slider, {"minimum": 0, "maximum": 0.9, "step": 0.1}
+    ),
+    "token_merging_hr_only": OptionInfo(
+        True, "Apply only to high-res fix pass. Disabling can yield a ~20-35% speedup on contemporary resolutions.",
+        gr.Checkbox
+    ),
+    "token_merging_ratio_hr": OptionInfo(
+        0.5, "Merging Ratio (high-res pass) - If 'Apply only to high-res' is enabled, this will always be the ratio used.",
+        gr.Slider, {"minimum": 0, "maximum": 0.9, "step": 0.1}
+    ),
+    # More advanced/niche settings:
+    "token_merging_random": OptionInfo(
+        False, "Use random perturbations - Can improve outputs for certain samplers. For others, it may cause visual artifacting.",
+        gr.Checkbox
+    ),
+    "token_merging_merge_attention": OptionInfo(
+        True, "Merge attention",
+        gr.Checkbox
+    ),
+     "token_merging_merge_cross_attention": OptionInfo(
+        False, "Merge cross attention",
+        gr.Checkbox
+    ),
+    "token_merging_merge_mlp": OptionInfo(
+        False, "Merge mlp",
+        gr.Checkbox
+    ),
+    "token_merging_maximum_down_sampling": OptionInfo(
+        1, "Maximum down sampling",
+        gr.Dropdown, lambda: {"choices": ["1", "2", "4", "8"]}
+    ),
+    "token_merging_stride_x": OptionInfo(
+        2, "Stride - X",
+        gr.Slider, {"minimum": 2, "maximum": 8, "step": 2}
+    ),
+    "token_merging_stride_y": OptionInfo(
+        2, "Stride - Y",
+        gr.Slider, {"minimum": 2, "maximum": 8, "step": 2}
+    )
 }))
 
 options_templates.update()
